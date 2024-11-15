@@ -10,6 +10,11 @@ pip install flash-attn==2.3.6 --no-build-isolation
 
 lmdeploy serve api_server /mnt/workspace/yangchao.zhou/opt/models/OpenGVLab/InternVL2-8B --backend turbomind --server-port 23333
 
+
+lmdeploy serve api_server /mnt/workspace/yangchao.zhou/opt/models/OpenGVLab/Mini-InternVL-Chat-2B-V1-5 --backend turbomind --server-port 23333 --tp 8 --cache-max-entry-count 0.3
+
+
+
 vllm serve "/mnt/workspace/yangchao.zhou/opt/models/OpenGVLab/InternVL2-8B" --trust-remote-code --dtype half 
 
 
