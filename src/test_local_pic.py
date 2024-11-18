@@ -1,3 +1,7 @@
+'''
+获取多个本地图片的多模态文本描述
+'''
+
 import os
 from openai import OpenAI
 import jinja2

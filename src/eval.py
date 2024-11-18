@@ -1,32 +1,103 @@
-# 环境二选一
-# conda activate infer_tyb
-# conda activate rancloud
-
+'''
+验证离线数据集的效果
+'''
 import os
 import pandas as pd
 import json
-from transformers import AutoTokenizer
-from vllm import LLM, SamplingParams
-# from loguru import logger
 import html
 import jinja2
-from transformers.generation.utils import GenerationConfig
 from transformers import AutoTokenizer, AutoModelForCausalLM
+from vllm import LLM, SamplingParams
+from transformers.generation.utils import GenerationConfig
+from openai import OpenAI
 import torch
+from PIL import Image
+from time import time
+from datetime import datetime
+
+# model_path = "/mnt/data/ran.xiao/cloud/prepare_for_online/llama2_as_en_12b_mistral_v4_1021"
+model_path = "/mnt/data/ran.xiao/cloud/prepare_for_online/llama3_as_en_12b_mistral_v2_1012"
+# 获取当前日期
+date = datetime.now().strftime('%Y%m%d-%H%M%S')
+# output_file_name = f'data/eval/表情+文本测试集-llama2_as_en_12b_mistral_v4_1021-{date}.xlsx'
+output_file_name = f'data/eval/表情+文本测试集-llama3_as_en_12b_mistral_v2_1012-{date}.xlsx'
+
+# Initialize the OpenAI client
+client = OpenAI(api_key='YOUR_API_KEY', base_url='http://0.0.0.0:23333/v1')
+
+# Get the model ID
+model_name = client.models.list().data[0].id
+
+prompt_path = "prompt/dis_pic_yc_1.tmpl"
 
 
+def is_image_file(file_path):
+    # 常见图片扩展名
+    image_extensions = ('.png', '.jpg', '.jpeg', '.bmp', '.gif')
+    return isinstance(file_path, str) and file_path.lower().endswith(image_extensions)
+
+
+# 加载模板
 def load_prompt_template(template_file):
     with open(template_file, 'r') as f:
         template = f.read()
-    template = jinja2.Template(template)
-    return template
+    return jinja2.Template(template)
+
+template = load_prompt_template(prompt_path)
+prompt = template.render({})
+
+def get_all_file_paths(directory):
+    """
+    获取指定目录下的所有文件路径，并按照文件名中的数字部分排序。
+    """
+    file_paths = []
+    for root, _, files in os.walk(directory):
+        for filename in files:
+            # 提取文件名中的数字部分
+            number_part = ''.join(filter(str.isdigit, filename))
+            if number_part:
+                file_paths.append((int(number_part), os.path.join(root, filename)))
+    
+    # 根据提取的数字部分进行排序
+    file_paths.sort(key=lambda x: x[0])
+    
+    # 返回排序后的文件路径列表
+    return [file_path for _, file_path in file_paths]
+
+pics = get_all_file_paths('/mnt/workspace/yangchao.zhou/opt/InternVL/data/eval/表情/extracted_images')
+
+def get_result(image_path):
+    response = client.chat.completions.create(
+        model=model_name,
+        messages=[{
+            'role': 'user',
+            'content': [{
+                'type': 'text',
+                'text': prompt,
+            }, {
+                'type': 'image_url',
+                'image_url': {
+                    'url': image_path,
+                    # 'url': 'https://modelscope.oss-cn-beijing.aliyuncs.com/resource/tiger.jpeg'
+                },
+            }],
+        }],
+        temperature=0.8,
+        top_p=0.8
+    )
+    return response.choices[0].message.content
 
 
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-model_path = "/mnt/data/ran.xiao/cloud/prepare_for_online/llama2_as_en_12b_mistral_v4_1021"
-output_file_name = 'data/eval/llama2_as_en_12b_mistral_v4_1021-20241114.xlsx' # 可以，多样性差点
+import torch
 
+if torch.cuda.is_available():
+    print(f"Number of GPUs available: {torch.cuda.device_count()}")
+    for i in range(torch.cuda.device_count()):
+        print(f"GPU {i}: {torch.cuda.get_device_name(i)}")
+else:
+    print("No GPUs are available.")
 
 
 
@@ -61,8 +132,8 @@ system_prompt_template_struct = load_prompt_template("/mnt/data/ran.xiao/cloud/e
 model = AutoModelForCausalLM.from_pretrained(
     model_path,
     torch_dtype=torch.bfloat16,
-    # device_map="auto",
-    device_map={"": "cuda:1"}  # 显式指定 GPU 0
+    device_map="auto",
+    # device_map={"": "cuda:1"}  # 显式指定 GPU 0
 )
 
 print(model.device)
@@ -106,8 +177,8 @@ def assistant(input):
     return {'role': "assistant", "content": input}
 
 
-def append_to_data_list(data_list, chat_id, round_id, npc_sid, total_number, role_name, intro, greeting, npc_info,user_info, sender_type,content, task_name):
-    data_list.append({
+def append_to_data_list(data_list, chat_id, round_id, npc_sid, total_number, role_name, intro, greeting, npc_info, user_info, sender_type, content, task_name, groundtruth=None, original_sentence=None):
+    data_entry = {
         '专项': task_name,
         'chat_id': chat_id,
         'round_id': round_id,
@@ -116,23 +187,33 @@ def append_to_data_list(data_list, chat_id, round_id, npc_sid, total_number, rol
         'role_name': role_name,
         'intro': intro,
         'greeting': greeting,
-        'npc_info':npc_info,
-        'user_info':user_info,
+        'npc_info': npc_info,
+        'user_info': user_info,
         'sender_type': sender_type,
-        'content': content
-    })
+        'content': content,
+    }
 
+    # 根据 sender_type 决定是否添加 groundtruth 或 original_sentence
+    if sender_type == 'ai':
+        data_entry['groundtruth'] = groundtruth
+    elif sender_type == 'user':
+        data_entry['图片中的原句'] = original_sentence
+
+    data_list.append(data_entry)
+
+def append_text(dis):
+    return "* Send you a sticker/image. "+ dis+" *"
 
 def infer():
     # 文件路径
-    file_path = "/mnt/data/ran.xiao/cloud/eval/test_data_input/固定评测模版v2.0.xlsx"
+    file_path = "data/eval/表情+文本测试集.xlsx"
     df = pd.read_excel(file_path, sheet_name="固定话术-跑模型以此为准！")
     print(df.columns)
     # 读取"角色池"表格，指定所需的列
     character_pool_df = pd.read_excel(file_path, sheet_name="角色池", usecols=["角色名", "struct_info", "intro", "profile", "测试环境sid","greeting"], dtype=str).fillna("")
 
     # 读取"固定话术"表格，指定所需的列
-    fixed_script_df = pd.read_excel(file_path, sheet_name="固定话术-跑模型以此为准！", usecols=["type", "session_id","round", "角色sid", "content"], dtype=str).fillna("")
+    fixed_script_df = pd.read_excel(file_path, sheet_name="固定话术-跑模型以此为准！", usecols=["type", "session_id","round", "角色sid", "content", "groundtruth", "原句"], dtype=str).fillna("")
 
     # 将每个字段内容以列表形式返回
     character_pool_df = character_pool_df.applymap(lambda x: html.unescape(x) if isinstance(x, str) else x)
@@ -197,25 +278,34 @@ def infer():
             if test_env_sid_value == fixed_script_df["角色sid"][i]:
                 scene = "easy talk"
                 user_input = content_list[i]
+                
+                # 从表中读取 groundtruth 和 原句
+                groundtruth = fixed_script_df["groundtruth"][i]
+                original_sentence = fixed_script_df["原句"][i]
+
+                # 图片处理逻辑
+                if user_input == '':
+                    pic_path = pics.pop(0)
+                    dis = get_result(pic_path)
+                    user_input = append_text(dis)
+                    print(f'图片描述{user_input}')
+
                 task_name = "简单输入"
 
-
             if task_name:
-                # SFW
-                # if (("OnlineMistral" in model_path) or (model_path.endswith("ModifiedChatTemplate"))) and round == 1: 
-                #     message_sfw = [{"role": "system", "content": sfw + "\n\n" + greeting_text}]
-                # elif round == 1: 
+                # 构建 SFW 消息
                 if round == 1: 
                     message_sfw = [{"role": "system", "content": sfw}, {"role": "assistant", "content": greeting_text}]
                 message_sfw.append(user(user_input))
                 response_sfw, len_token = generate(messages=message_sfw)
                 print([user_input, response_sfw, str(len(response_sfw)), str(len_token)])
 
-                append_to_data_list(sfw_data, chat_id, round, npc_sid, i + 1, role_name, intro_text, greeting_text, npc_info,user_info,'user', user_input, type_1[i])
-                append_to_data_list(sfw_data, chat_id, round, npc_sid, i + 1, role_name, intro_text, greeting_text, npc_info,user_info,'ai', response_sfw, type_1[i])
+                # 添加数据时包括 groundtruth 和 原句
+                append_to_data_list(sfw_data, chat_id, round, npc_sid, i + 1, role_name, intro_text, greeting_text, npc_info, user_info, 'user', user_input, type_1[i], groundtruth, original_sentence)
+                append_to_data_list(sfw_data, chat_id, round, npc_sid, i + 1, role_name, intro_text, greeting_text, npc_info, user_info, 'ai', response_sfw, type_1[i], groundtruth, original_sentence)
 
                 message_sfw.append(assistant(response_sfw))
-                # round_id += 1
+
 
         chat_id += 1
 
