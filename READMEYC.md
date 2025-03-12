@@ -1,6 +1,6 @@
 pip install openai
-
-path = '/mnt/workspace/yangchao.zhou/opt/models/OpenGVLab/InternVL2-8B'
+pip install streamlit-image-select
+path = '/maindata/data/shared/public/yangchao.zhou/projects/models/OpenGVLab/InternVL2_5-4B'
 
 export  PYTHONPATH=`pwd`
 
@@ -8,11 +8,14 @@ source /opt/venv/bin/activate
 
 pip install flash-attn==2.3.6 --no-build-isolation
 
-lmdeploy serve api_server /mnt/workspace/yangchao.zhou/opt/models/OpenGVLab/InternVL2-8B --backend turbomind --server-port 23333
+lmdeploy serve api_server /maindata/data/shared/public/yangchao.zhou/projects/models/OpenGVLab/InternVL2-8B --backend turbomind --server-port 23333
 
 
-lmdeploy serve api_server /mnt/workspace/yangchao.zhou/opt/models/OpenGVLab/Mini-InternVL-Chat-2B-V1-5 --backend turbomind --server-port 23333 --tp 8 --cache-max-entry-count 0.3
+lmdeploy serve api_server /maindata/data/shared/public/yangchao.zhou/projects/models/OpenGVLab/InternVL2-8B --backend turbomind --server-port 23333 --tp 8 --cache-max-entry-count 0.3
 
+lmdeploy serve api_server /maindata/data/shared/public/yangchao.zhou/projects/models/OpenGVLab/InternVL2-8B --backend turbomind --server-port 23334  --tp 4 --cache-max-entry-count 0.3
+
+lmdeploy serve api_server /maindata/data/shared/public/yangchao.zhou/projects/models/OpenGVLab/InternVL2_5-4B --backend turbomind --server-port 23333  --tp 4 --cache-max-entry-count 0.3
 
 
 vllm serve "/mnt/workspace/yangchao.zhou/opt/models/OpenGVLab/InternVL2-8B" --trust-remote-code --dtype half 
@@ -48,5 +51,7 @@ export CONTROLLER_PORT=40000
 export CONTROLLER_URL=http://0.0.0.0:$CONTROLLER_PORT
 export SD_WORKER_URL=http://0.0.0.0:$SD_SERVER_PORT
 cd streamlit_demo/
-CUDA_VISIBLE_DEVICES=1 python model_worker.py --host 0.0.0.0 --controller $CONTROLLER_URL --port 40004 --worker http://0.0.0.0:40004 --model-path /mnt/workspace/yangchao.zhou/opt/models/OpenGVLab/InternVL2-8B
+CUDA_VISIBLE_DEVICES=1 python model_worker.py --host 0.0.0.0 --controller $CONTROLLER_URL --port 40004 --worker http://0.0.0.0:40004 --model-path /maindata/data/shared/public/yangchao.zhou/projects/models/OpenGVLab/InternVL2-8B
 
+
+CUDA_VISIBLE_DEVICES=1 python model_worker.py --host 0.0.0.0 --controller $CONTROLLER_URL --port 40004 --worker http://0.0.0.0:40004 --model-path /maindata/data/shared/public/yangchao.zhou/projects/models/OpenGVLab/InternVL2_5-4B 

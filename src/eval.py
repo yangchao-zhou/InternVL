@@ -7,7 +7,7 @@ import json
 import html
 import jinja2
 from transformers import AutoTokenizer, AutoModelForCausalLM
-from vllm import LLM, SamplingParams
+# from vllm import LLM, SamplingParams
 from transformers.generation.utils import GenerationConfig
 from openai import OpenAI
 import torch
@@ -16,7 +16,7 @@ from time import time
 from datetime import datetime
 
 # model_path = "/mnt/data/ran.xiao/cloud/prepare_for_online/llama2_as_en_12b_mistral_v4_1021"
-model_path = "/mnt/data/ran.xiao/cloud/prepare_for_online/llama3_as_en_12b_mistral_v2_1012"
+model_path = "/maindata/data/shared/ai_story_workspace-dsw/ran.xiao/cloud/prepare_for_online/llama2_as_en_12b_mistral_sfw_1115"
 # 获取当前日期
 date = datetime.now().strftime('%Y%m%d-%H%M%S')
 # output_file_name = f'data/eval/表情+文本测试集-llama2_as_en_12b_mistral_v4_1021-{date}.xlsx'
@@ -124,8 +124,8 @@ generate_config = GenerationConfig(**{
 
 
 # ## sys_20_2
-system_prompt_template_nostruct = load_prompt_template("/mnt/data/ran.xiao/cloud/eval/config_data/nsfw_npc_sys_prompt_0920_nostruct.tmpl")
-system_prompt_template_struct = load_prompt_template("/mnt/data/ran.xiao/cloud/eval/config_data/nsfw_npc_sys_prompt_0920_struct.tmpl")
+system_prompt_template_nostruct = load_prompt_template("prompt/sfw_npc_sys_prompt_1116_nostruct_infer.tmpl")
+system_prompt_template_struct = load_prompt_template("prompt/sfw_npc_sys_prompt_1116_struct_infer.tmpl")
 
 
 # llm = LLM(model=model_path, tensor_parallel_size=1, max_model_len=4096, dtype="bfloat16")
